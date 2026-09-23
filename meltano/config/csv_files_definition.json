@@ -1,0 +1,58 @@
+[
+  {
+    "entity": "clientes",
+    "path": "../data/raw/clientes.csv",
+    "keys": ["cod_cliente"],
+    "encoding": "UTF-8",
+    "delimiter": ",",
+    "strict": true
+  },
+  {
+    "entity": "contas",
+    "path": "../data/raw/contas.csv",
+    "keys": ["num_conta"],
+    "encoding": "UTF-8",
+    "delimiter": ",",
+    "strict": true
+  },
+  {
+    "entity": "transacoes",
+    "path": "../data/raw/transacoes.csv",
+    "keys": ["cod_transacao"],
+    "encoding": "UTF-8",
+    "delimiter": ",",
+    "strict": true
+  },
+  {
+    "entity": "propostas_credito",
+    "path": "../data/raw/propostas_credito.csv",
+    "keys": ["cod_proposta"],
+    "encoding": "UTF-8",
+    "delimiter": ",",
+    "strict": true
+  },
+  {
+    "entity": "colaboradores",
+    "path": "../data/raw/colaboradores.csv",
+    "keys": ["cod_colaborador"],
+    "encoding": "UTF-8",
+    "delimiter": ",",
+    "strict": true
+  },
+  {
+    "entity": "agencias",
+    "path": "../data/raw/agencias.csv",
+    "keys": ["cod_agencia"],
+    "encoding": "UTF-8",
+    "delimiter": ",",
+    "strict": true
+  },
+  {
+    "entity": "colaborador_agencia",
+    "path": "../data/raw/colaborador_agencia.csv",
+    "keys": ["cod_colaborador"],
+    "encoding": "UTF-8",
+    "delimiter": ",",
+    "strict": true
+  }
+]

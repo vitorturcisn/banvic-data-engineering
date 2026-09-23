@@ -1,0 +1,121 @@
+airflowVersion: "3.2.2"
+defaultAirflowRepository: banvic-airflow
+defaultAirflowTag: "1.0.2"
+
+apiSecretKeySecretName: airflow-api-static-secret
+
+extraEnv: |
+  - name: TARGET_POSTGRES_HOST
+    value: banvic-postgres.banvic.svc.cluster.local
+  - name: TARGET_POSTGRES_PORT
+    value: "5432"
+  - name: TARGET_POSTGRES_DATABASE
+    valueFrom:
+      secretKeyRef:
+        name: banvic-postgres-secret
+        key: POSTGRES_DB
+  - name: TARGET_POSTGRES_USER
+    valueFrom:
+      secretKeyRef:
+        name: banvic-postgres-secret
+        key: POSTGRES_USER
+  - name: TARGET_POSTGRES_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: banvic-postgres-secret
+        key: POSTGRES_PASSWORD
+  - name: AIRFLOW__CORE__PARALLELISM
+    value: "2"
+
+executor: LocalExecutor
+
+# Usar o PostgreSQL que já existe no namespace banvic
+postgresql:
+  enabled: false
+
+# Não precisamos de Redis com LocalExecutor
+redis:
+  enabled: false
+
+# Não precisamos de PgBouncer nesta POC local
+pgbouncer:
+  enabled: false
+
+# Banco de metadados externo
+data:
+  metadataSecretName: airflow-metadata
+
+# Não criar usuário padrão admin/admin
+createUserJob:
+  enabled: false
+  defaultUser:
+    enabled: false
+
+# DAGs são incorporadas à imagem customizada do Airflow
+dags:
+  persistence:
+    enabled: false
+  gitSync:
+    enabled: false
+
+# Sem armazenamento persistente de logs nesta POC
+logs:
+  persistence:
+    enabled: false
+
+# Não precisaremos de Triggerer inicialmente
+triggerer:
+  enabled: false
+
+# Recursos reduzidos para o ambiente local
+apiServer:
+  startupProbe:
+    initialDelaySeconds: 0
+    timeoutSeconds: 20
+    failureThreshold: 18
+    periodSeconds: 10
+    scheme: HTTP
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+scheduler:
+  startupProbe:
+    initialDelaySeconds: 0
+    timeoutSeconds: 60
+    failureThreshold: 12
+    periodSeconds: 10
+
+  livenessProbe:
+    initialDelaySeconds: 30
+    timeoutSeconds: 60
+    failureThreshold: 5
+    periodSeconds: 60
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "384Mi"
+    limits:
+      cpu: "500m"
+      memory: "768Mi"
+
+dagProcessor:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+statsd:
+  enabled: false
+
+flower:
+  enabled: false

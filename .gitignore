@@ -1,0 +1,35 @@
+﻿# Secrets and environment files
+.env
+.env.*
+*.env
+*.key
+*.pem
+
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+
+# Meltano
+meltano/.meltano/
+
+# Generated Helm manifest
+infra/airflow/rendered.yaml
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# Archives
+*.zip
+*.rar
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,7 @@
+﻿.git
+.gitignore
+meltano/.meltano/
+infra/airflow/rendered.yaml
+**/__pycache__/
+**/*.pyc
+*.zip

@@ -1,0 +1,34 @@
+﻿default_environment: dev
+
+project_id: 01a0cbfa-da47-7e6d-9e97-6f6cab2b844d
+
+environments:
+  - name: dev
+  - name: staging
+  - name: prod
+
+send_anonymous_usage_stats: false
+
+plugins:
+  extractors:
+    - name: tap-csv
+      variant: meltanolabs
+      pip_url: git+https://github.com/MeltanoLabs/tap-csv.git
+      config:
+        csv_files_definition: config/csv_files_definition.json
+        add_metadata_columns: true
+
+  loaders:
+    - name: target-postgres
+      variant: meltanolabs
+      pip_url: meltanolabs-target-postgres
+      config:
+        host: $TARGET_POSTGRES_HOST
+        port: $TARGET_POSTGRES_PORT
+        database: $TARGET_POSTGRES_DATABASE
+        user: $TARGET_POSTGRES_USER
+        password: $TARGET_POSTGRES_PASSWORD
+        default_target_schema: raw
+        load_method: overwrite
+        validate_records: true
+        activate_version: false
