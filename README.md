@@ -21,51 +21,40 @@ O objetivo deste POC é demonstrar uma infraestrutura reprodutível e uma pipeli
 
 ## 2. Arquitetura
 
-```mermaid
-flowchart TD
-    A["ERP / arquivos CSV<br/>7 arquivos"] --> B["Docker Image<br/>Airflow + DAG + Meltano + dados"]
-    B --> C["Kind / Kubernetes"]
-
-    C --> D["Airflow API Server"]
-    C --> E["Airflow Scheduler"]
-    C --> F["Airflow DAG Processor"]
-    C --> G["PostgreSQL"]
-
-    E --> H["DAG: banvic_elt"]
-
-    H --> H1["1. validate_source_files"]
-    H1 --> H2["2. run_meltano"]
-    H2 --> H3["tap-csv"]
-    H3 --> H4["target-postgres"]
-    H4 --> G
-    G --> H5["3. validate_destination"]
-
-    S["Kubernetes Secrets"] --> G
-    S --> D
-```
+![Arquitetura da Plataforma do POC](docs/banvic_arquitetura.png)
 
 ### Fluxo da pipeline
 
 ```text
-CSV
-  │
-  ▼
-validate_source_files
-  │
-  ▼
-Meltano
-  ├── tap-csv
-  │
-  └── target-postgres
-          │
-          ▼
-    PostgreSQL / raw
-          │
-          ▼
-validate_destination
+7 arquivos CSV
+        │
+        ▼
+Imagem Docker
+        │
+        ▼
+Kind / Kubernetes
+        │
+        ▼
+Apache Airflow
+        │
+        ▼
+DAG banvic_elt
+        │
+        ├── validate_source_files
+        │
+        ├── run_meltano
+        │       │
+        │       ├── tap-csv
+        │       │
+        │       └── target-postgres
+        │               │
+        │               ▼
+        │        PostgreSQL / raw
+        │
+        └── validate_destination
 ```
 
-A imagem customizada do Airflow contém os DAGs, o projeto Meltano e os arquivos CSV necessários para reproduzir o POC.
+A imagem customizada do Airflow contém os DAGs, o projeto Meltano, as configurações necessárias e os sete arquivos CSV utilizados no POC.
 
 ## 3. Tecnologias
 
@@ -77,13 +66,13 @@ A imagem customizada do Airflow contém os DAGs, o projeto Meltano e os arquivos
 | Helm | Instalação e atualização do Airflow |
 | Apache Airflow 3.2.2 | Orquestração da pipeline |
 | Meltano 4.2.2 | Extração e carregamento dos CSVs |
-| tap-csv | Source/Extractor dos arquivos CSV |
+| tap-csv | Extractor dos arquivos CSV |
 | target-postgres | Loader para PostgreSQL |
 | PostgreSQL 16 | Armazenamento dos dados |
 | Python | Implementação da DAG e validações |
 | PowerShell | Automação do bootstrap e verificação no Windows |
 
-Versões principais utilizadas no POC:
+### Versões principais
 
 - Airflow: `3.2.2`
 - Helm chart Apache Airflow: `1.22.0`
@@ -108,6 +97,10 @@ banvic-data-engineering/
 │       ├── contas.csv
 │       ├── propostas_credito.csv
 │       └── transacoes.csv
+│
+├── docs/
+│   ├── banvic_arquitetura.png
+│   └── banvic_modelo_conceitual.png
 │
 ├── infra/
 │   ├── airflow/
@@ -197,7 +190,7 @@ validate_records: true
 activate_version: false
 ```
 
-A estratégia `overwrite` foi escolhida porque o POC trabalha com uma fotografia completa dos arquivos de origem. Cada execução substitui as tabelas de destino pelo snapshot atual.
+A estratégia `overwrite` foi escolhida porque o POC trabalha com uma fotografia completa dos arquivos de origem. Cada execução recompõe as tabelas de destino com o snapshot atual.
 
 Isso torna a carga idempotente do ponto de vista do conteúdo: executar novamente o mesmo conjunto de arquivos produz novamente o mesmo estado esperado da camada `raw`.
 
@@ -236,7 +229,7 @@ Responsabilidades:
 - contar os registros;
 - gerar os quantitativos esperados para a etapa seguinte.
 
-A task possui retries:
+Configuração de retry:
 
 ```text
 retries = 2
@@ -273,7 +266,7 @@ Responsabilidades:
 - comparar o resultado com os quantitativos calculados na origem;
 - falhar a task caso exista divergência.
 
-As três etapas são encadeadas diretamente, garantindo:
+As três etapas são encadeadas diretamente:
 
 ```text
 validação da origem
@@ -285,11 +278,11 @@ validação do destino
 
 ## 8. Confiabilidade e tratamento de falhas
 
-O POC inclui mecanismos básicos de confiabilidade:
+O POC inclui mecanismos básicos de confiabilidade.
 
 ### Retries
 
-As tasks principais possuem até duas novas tentativas.
+As tasks principais possuem até duas novas tentativas:
 
 ```text
 retries = 2
@@ -306,8 +299,6 @@ A execução do Meltano possui timeout de 15 minutos:
 execution_timeout = 15 minutes
 ```
 
-Assim, uma execução que fique presa além do limite não permanece indefinidamente em andamento.
-
 ### Idempotência
 
 O loader PostgreSQL está configurado com:
@@ -316,7 +307,7 @@ O loader PostgreSQL está configurado com:
 load_method: overwrite
 ```
 
-Como os dados são tratados como snapshot completo, uma nova execução do mesmo pipeline recompõe o estado das tabelas `raw`.
+Como os dados são tratados como snapshot completo, uma nova execução do mesmo pipeline recompõe o estado esperado das tabelas `raw`.
 
 Além disso, a DAG limita a execução concorrente:
 
@@ -362,13 +353,12 @@ Porta:
 5432
 ```
 
-O banco contém:
+O PostgreSQL hospeda:
 
-```text
-banvic
-```
+- database `banvic`, utilizado pela pipeline;
+- database `airflow`, utilizado pelos metadados do Airflow.
 
-e possui o schema utilizado pela ingestão:
+O banco `banvic` possui o schema:
 
 ```text
 raw
@@ -390,45 +380,57 @@ A persistência do banco é feita com um PersistentVolumeClaim de 1 GiB.
 
 ## 10. Modelo conceitual
 
-O conjunto de dados representa entidades relacionadas a clientes, contas, transações, propostas de crédito, colaboradores e agências.
+O modelo conceitual completo é apresentado abaixo:
 
-Uma visão conceitual simplificada é:
+![Modelo Conceitual de Dados](docs/banvic_modelo_conceitual.png)
 
-```mermaid
-erDiagram
-    CLIENTES ||--o{ CONTAS : possui
-    CLIENTES ||--o{ PROPOSTAS_CREDITO : solicita
-    CONTAS ||--o{ TRANSACOES : registra
-    COLABORADORES ||--o{ COLABORADOR_AGENCIA : associado
-    AGENCIAS ||--o{ COLABORADOR_AGENCIA : possui
-```
-
-Principais identificadores utilizados na configuração dos arquivos:
+As principais entidades são:
 
 ```text
 CLIENTES
-  cod_cliente
-
 CONTAS
-  num_conta
-
 TRANSACOES
-  cod_transacao
-
 PROPOSTAS_CREDITO
-  cod_proposta
-
 COLABORADORES
-  cod_colaborador
-
 AGENCIAS
-  cod_agencia
-
 COLABORADOR_AGENCIA
-  cod_colaborador
 ```
 
-O modelo acima é conceitual. A camada `raw` foi mantida simples para o objetivo do POC e não depende da criação de constraints relacionais para realizar a ingestão.
+### Principais chaves
+
+```text
+CLIENTES
+  PK: cod_cliente
+
+CONTAS
+  PK: num_conta
+  FK: cod_cliente
+  FK: cod_agencia
+  FK: cod_colaborador
+
+TRANSACOES
+  PK: cod_transacao
+  FK: num_conta
+
+PROPOSTAS_CREDITO
+  PK: cod_proposta
+  FK: cod_cliente
+  FK: cod_colaborador
+
+COLABORADORES
+  PK: cod_colaborador
+
+AGENCIAS
+  PK: cod_agencia
+
+COLABORADOR_AGENCIA
+  PK/FK: cod_colaborador
+  FK: cod_agencia
+```
+
+Os relacionamentos apresentados no diagrama são derivados das chaves estrangeiras presentes nas entidades.
+
+A camada `raw` foi mantida simples para o objetivo do POC e não depende da criação de constraints relacionais para realizar a ingestão.
 
 ## 11. Infraestrutura como código
 
@@ -464,19 +466,21 @@ infra/postgres/
 
 ### Airflow
 
-O deploy é feito pelo Helm chart oficial do Apache Airflow usando:
+O deploy é feito pelo Helm chart do Apache Airflow usando:
 
 ```text
 infra/airflow/values.yaml
 ```
 
-A configuração desabilita componentes que não são necessários para este POC e utiliza:
+A configuração utiliza:
 
 ```text
 LocalExecutor
 ```
 
-O banco de metadados do Airflow também utiliza PostgreSQL, no database:
+e desabilita componentes não necessários para este POC.
+
+O banco de metadados do Airflow utiliza o database:
 
 ```text
 airflow
@@ -492,7 +496,7 @@ banvic
 
 Credenciais não são versionadas no Git.
 
-O projeto utiliza Kubernetes Secrets para armazenar:
+O projeto utiliza Kubernetes Secrets para:
 
 ```text
 banvic-postgres-secret
@@ -503,7 +507,7 @@ airflow-admin-secret
 
 Os Secrets são criados pelo script `bootstrap.ps1` quando ainda não existem.
 
-O `.gitignore` também exclui arquivos locais de ambiente e credenciais:
+O `.gitignore` exclui arquivos locais de ambiente e credenciais:
 
 ```text
 .env
@@ -587,13 +591,7 @@ Verificação concluída.
 
 ## 15. Execução da DAG
 
-O Airflow utiliza a DAG:
-
-```text
-banvic_elt
-```
-
-A DAG possui:
+A DAG utiliza configuração de execução manual:
 
 ```text
 schedule = None
@@ -676,7 +674,7 @@ ORDER BY tabela;
 
 O ambiente foi validado após a execução do bootstrap e do script de verificação.
 
-Pods principais:
+### Pods principais
 
 ```text
 airflow-api-server       Running / Ready
@@ -685,13 +683,13 @@ airflow-scheduler        Running / Ready
 banvic-postgres          Running / Ready
 ```
 
-Configuração de paralelismo:
+### Configuração de paralelismo
 
 ```text
 Airflow parallelism = 2
 ```
 
-Quantidade de registros validada:
+### Quantidade de registros validada
 
 | Tabela | Registros |
 |---|---:|
@@ -796,6 +794,7 @@ dags/banvic_elt.py
 infra/
 meltano/
 data/raw/
+docs/
 scripts/bootstrap.ps1
 scripts/verify.ps1
 README.md
@@ -806,5 +805,3 @@ README.md
 GitHub:
 
 https://github.com/vitorturcisn/banvic-data-engineering
-
----
