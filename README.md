@@ -1,143 +1,184 @@
 # BanVic Data Engineering POC
 
-Proof of Concept de Engenharia de Dados para ingestão, orquestração e validação dos dados de um ERP bancário fictício (BanVic).
+Proof of Concept de Engenharia de Dados para ingestÃ£o, orquestraÃ§Ã£o e validaÃ§Ã£o dos dados de um ERP bancÃ¡rio fictÃ­cio (BanVic).
 
-O projeto implementa uma pipeline ELT executada em Kubernetes/Kind, com Apache Airflow para orquestração, Meltano para ingestão dos arquivos CSV e PostgreSQL como camada de destino (`raw`).
+O projeto implementa uma pipeline ELT executada em Kubernetes/Kind, com Apache Airflow para orquestraÃ§Ã£o, Meltano para ingestÃ£o dos arquivos CSV e PostgreSQL como camada de destino (`raw`).
 
-## 1. Visão geral
+A infraestrutura Ã© declarada com Terraform, enquanto Helm Ã© utilizado pelo Terraform para instalar o Apache Airflow.
 
-O objetivo deste POC é demonstrar uma infraestrutura reprodutível e uma pipeline de dados simples, modular e observável, cobrindo:
+---
 
-- provisionamento de infraestrutura com Kubernetes/Kind e Helm;
-- execução do Apache Airflow em Kubernetes;
-- ingestão dos arquivos CSV usando Meltano;
+## 1. VisÃ£o geral
+
+O objetivo deste POC Ã© demonstrar uma soluÃ§Ã£o reprodutÃ­vel de Engenharia de Dados, cobrindo:
+
+- provisionamento de um cluster Kubernetes local com Kind;
+- provisionamento da plataforma com Terraform;
+- execuÃ§Ã£o do Apache Airflow em Kubernetes;
+- ingestÃ£o dos arquivos CSV usando Meltano;
 - carga dos dados em PostgreSQL na camada `raw`;
-- validação dos arquivos de origem antes da ingestão;
-- validação da quantidade de registros após a carga;
-- retries e timeout nas etapas da DAG;
-- comportamento idempotente para uma carga full snapshot;
+- validaÃ§Ã£o da existÃªncia dos arquivos antes da ingestÃ£o;
+- validaÃ§Ã£o da quantidade de registros apÃ³s a carga;
+- retries e timeout nas tarefas de ingestÃ£o;
+- controle de concorrÃªncia da DAG;
+- carga idempotente utilizando snapshot completo;
 - armazenamento de credenciais em Kubernetes Secrets;
-- scripts de bootstrap e verificação do ambiente.
+- persistÃªncia dos dados do PostgreSQL;
+- persistÃªncia dos logs do Airflow;
+- scripts PowerShell para bootstrap e verificaÃ§Ã£o do ambiente.
+
+---
 
 ## 2. Arquitetura
 
 ![Arquitetura da Plataforma do POC](docs/banvic_arquitetura.png)
 
-### Fluxo da pipeline
+### Fluxo da plataforma
 
 ```text
-7 arquivos CSV
-        │
-        ▼
-Imagem Docker
-        │
-        ▼
-Kind / Kubernetes
-        │
-        ▼
-Apache Airflow
-        │
-        ▼
-DAG banvic_elt
-        │
-        ├── validate_source_files
-        │
-        ├── run_meltano
-        │       │
-        │       ├── tap-csv
-        │       │
-        │       └── target-postgres
-        │               │
-        │               ▼
-        │        PostgreSQL / raw
-        │
-        └── validate_destination
+                       Terraform
+                           â”‚
+          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+          â”‚                                 â”‚
+          â–¼                                 â–¼
+      Kind Cluster                    Platform Kubernetes
+                                          â”‚
+                           â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                           â”‚              â”‚              â”‚
+                           â–¼              â–¼              â–¼
+                        Airflow       PostgreSQL       PVCs
+                           â”‚              â”‚
+                           â”‚              â””â”€â”€ raw
+                           â”‚
+                           â–¼
+                     DAG banvic_elt
+                           â”‚
+          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+          â”‚                â”‚                 â”‚
+          â–¼                â–¼                 â–¼
+   FileSensor #1 ... FileSensor #7     ...
+          â”‚                â”‚
+          â–¼                â–¼
+   ingest_table #1 ... ingest_table #7
+          â”‚
+          â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                           â–¼
+                  summarize_ingestion
 ```
 
-A imagem customizada do Airflow contém os DAGs, o projeto Meltano, as configurações necessárias e os sete arquivos CSV utilizados no POC.
+---
 
 ## 3. Tecnologias
 
 | Tecnologia | Uso |
 |---|---|
-| Docker | Construção da imagem customizada do Airflow |
+| Docker | ConstruÃ§Ã£o da imagem customizada do Airflow |
 | Kind | Cluster Kubernetes local |
-| Kubernetes | Execução e gerenciamento dos componentes |
-| Helm | Instalação e atualização do Airflow |
-| Apache Airflow 3.2.2 | Orquestração da pipeline |
-| Meltano 4.2.2 | Extração e carregamento dos CSVs |
+| Kubernetes | ExecuÃ§Ã£o e gerenciamento dos componentes |
+| Terraform | Provisionamento da infraestrutura |
+| Helm | InstalaÃ§Ã£o do Apache Airflow |
+| Apache Airflow 3.2.2 | OrquestraÃ§Ã£o da pipeline |
+| Meltano 4.2.2 | ExtraÃ§Ã£o e carregamento dos CSVs |
 | tap-csv | Extractor dos arquivos CSV |
 | target-postgres | Loader para PostgreSQL |
-| PostgreSQL 16 | Armazenamento dos dados |
-| Python | Implementação da DAG e validações |
-| PowerShell | Automação do bootstrap e verificação no Windows |
+| PostgreSQL 16.15 | Armazenamento dos dados |
+| Python | ImplementaÃ§Ã£o da DAG e validaÃ§Ãµes |
+| PowerShell | AutomaÃ§Ã£o do bootstrap e verificaÃ§Ã£o |
 
-### Versões principais
+### VersÃµes principais
 
-- Airflow: `3.2.2`
-- Helm chart Apache Airflow: `1.22.0`
-- Meltano: `4.2.2`
-- PostgreSQL: `16.15-alpine3.24`
-- Kind node image: `kindest/node:v1.35.8`
+```text
+Terraform: >= 1.6.0
+Airflow: 3.2.2
+Apache Airflow Helm Chart: 1.22.0
+Meltano: 4.2.2
+PostgreSQL: 16.15-alpine3.24
+Kind node image: kindest/node:v1.35.8
+Terraform provider kind: 0.11.0
+Terraform provider kubernetes: 3.2.1
+Terraform provider helm: 3.3.0
+Terraform provider random: 3.9.0
+```
+
+---
 
 ## 4. Estrutura do projeto
 
 ```text
 banvic-data-engineering/
-│
-├── dags/
-│   └── banvic_elt.py
-│
-├── data/
-│   └── raw/
-│       ├── agencias.csv
-│       ├── clientes.csv
-│       ├── colaborador_agencia.csv
-│       ├── colaboradores.csv
-│       ├── contas.csv
-│       ├── propostas_credito.csv
-│       └── transacoes.csv
-│
-├── docs/
-│   ├── banvic_arquitetura.png
-│   └── banvic_modelo_conceitual.png
-│
-├── infra/
-│   ├── airflow/
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── values.yaml
-│   │
-│   ├── kind/
-│   │   └── cluster.yaml
-│   │
-│   ├── postgres/
-│   │   ├── deployment.yaml
-│   │   ├── pvc.yaml
-│   │   └── service.yaml
-│   │
-│   └── namespace.yaml
-│
-├── meltano/
-│   ├── config/
-│   │   └── csv_files_definition.json
-│   ├── meltano.yml
-│   └── *_lock.yml
-│
-├── scripts/
-│   ├── bootstrap.ps1
-│   └── verify.ps1
-│
-├── .dockerignore
-├── .gitignore
-└── README.md
+â”‚
+â”œâ”€â”€ dags/
+â”‚   â””â”€â”€ banvic_elt.py
+â”‚
+â”œâ”€â”€ data/
+â”‚   â””â”€â”€ raw/
+â”‚       â”œâ”€â”€ agencias.csv
+â”‚       â”œâ”€â”€ clientes.csv
+â”‚       â”œâ”€â”€ colaborador_agencia.csv
+â”‚       â”œâ”€â”€ colaboradores.csv
+â”‚       â”œâ”€â”€ contas.csv
+â”‚       â”œâ”€â”€ propostas_credito.csv
+â”‚       â””â”€â”€ transacoes.csv
+â”‚
+â”œâ”€â”€ docs/
+â”‚   â”œâ”€â”€ banvic_arquitetura.png
+â”‚   â””â”€â”€ banvic_modelo_conceitual.png
+â”‚
+â”œâ”€â”€ airflow/
+â”‚   â”œâ”€â”€ Dockerfile
+â”‚   â”œâ”€â”€ requirements.txt
+â”‚   â””â”€â”€ values.yaml
+â”‚
+â”œâ”€â”€ kind/
+â”‚   â””â”€â”€ cluster.yaml
+â”‚
+â”œâ”€â”€ meltano/
+â”‚   â”œâ”€â”€ config/
+â”‚   â”‚   â””â”€â”€ csv_files_definition.json
+â”‚   â”œâ”€â”€ meltano.yml
+â”‚   â””â”€â”€ *_lock.yml
+â”‚
+â”œâ”€â”€ terraform/
+â”‚   â”œâ”€â”€ cluster/
+â”‚   â”‚   â”œâ”€â”€ .terraform.lock.hcl
+â”‚   â”‚   â”œâ”€â”€ main.tf
+â”‚   â”‚   â”œâ”€â”€ outputs.tf
+â”‚   â”‚   â”œâ”€â”€ providers.tf
+â”‚   â”‚   â”œâ”€â”€ variables.tf
+â”‚   â”‚   â””â”€â”€ versions.tf
+â”‚   â”‚
+â”‚   â””â”€â”€ platform/
+â”‚       â”œâ”€â”€ .terraform.lock.hcl
+â”‚       â”œâ”€â”€ airflow.tf
+â”‚       â”œâ”€â”€ namespace.tf
+â”‚       â”œâ”€â”€ postgres.tf
+â”‚       â”œâ”€â”€ postgres-init.tf
+â”‚       â”œâ”€â”€ providers.tf
+â”‚       â”œâ”€â”€ random.tf
+â”‚       â”œâ”€â”€ secrets.tf
+â”‚       â”œâ”€â”€ storage.tf
+â”‚       â”œâ”€â”€ variables.tf
+â”‚       â””â”€â”€ versions.tf
+â”‚
+â”œâ”€â”€ scripts/
+â”‚   â”œâ”€â”€ bootstrap.ps1
+â”‚   â””â”€â”€ verify.ps1
+â”‚
+â”œâ”€â”€ .dockerignore
+â”œâ”€â”€ .gitignore
+â”œâ”€â”€ 1_GITHUB.txt
+â””â”€â”€ README.md
 ```
+
+> `kind/` pode ser removido apÃ³s esta limpeza, pois a configuraÃ§Ã£o do cluster Kind estÃ¡ atualmente declarada diretamente em `terraform/cluster/main.tf`.
+
+---
 
 ## 5. Dados de entrada
 
 O POC utiliza sete arquivos CSV fornecidos pelo desafio:
 
-| Arquivo | Destino | Registros validados |
+| Arquivo | Destino | Registros |
 |---|---|---:|
 | `agencias.csv` | `raw.agencias` | 10 |
 | `clientes.csv` | `raw.clientes` | 998 |
@@ -147,41 +188,67 @@ O POC utiliza sete arquivos CSV fornecidos pelo desafio:
 | `propostas_credito.csv` | `raw.propostas_credito` | 2.000 |
 | `transacoes.csv` | `raw.transacoes` | 71.999 |
 
-Os arquivos são armazenados em `data/raw/` e fazem parte da imagem customizada utilizada pelo Airflow.
+Os arquivos permanecem no repositÃ³rio em `data/raw/`.
 
-## 6. Estratégia de ingestão
+Eles **nÃ£o sÃ£o incorporados Ã  imagem Docker do Airflow**.
 
-A ingestão foi implementada como um ELT simples:
+O `.dockerignore` exclui:
+
+```text
+data/raw/
+```
+
+Durante a execuÃ§Ã£o, os CSVs sÃ£o disponibilizados ao Scheduler atravÃ©s de um PersistentVolume/PersistentVolumeClaim.
+
+---
+
+## 6. EstratÃ©gia de ingestÃ£o
+
+A ingestÃ£o segue o fluxo:
 
 ```text
 CSV
-  ↓
+ â”‚
+ â–¼
 tap-csv
-  ↓
+ â”‚
+ â–¼
 target-postgres
-  ↓
-PostgreSQL / raw
+ â”‚
+ â–¼
+PostgreSQL
+ â”‚
+ â–¼
+raw
 ```
 
 ### Extract
 
-O `tap-csv` lê os sete arquivos definidos em:
+O `tap-csv` lÃª os arquivos definidos em:
 
 ```text
 meltano/config/csv_files_definition.json
 ```
 
-A configuração define:
+A configuraÃ§Ã£o define:
 
-- caminho dos arquivos;
+- arquivo de origem;
+- caminho relativo;
+- chave do stream;
 - delimitador `,`;
 - encoding UTF-8;
-- modo estrito (`strict: true`);
-- colunas de metadados.
+- `strict: true`.
+
+A associaÃ§Ã£o `colaborador_agencia` utiliza uma chave composta:
+
+```text
+cod_colaborador
+cod_agencia
+```
 
 ### Load
 
-O `target-postgres` grava os dados no PostgreSQL usando:
+O `target-postgres` utiliza:
 
 ```yaml
 default_target_schema: raw
@@ -190,13 +257,17 @@ validate_records: true
 activate_version: false
 ```
 
-A estratégia `overwrite` foi escolhida porque o POC trabalha com uma fotografia completa dos arquivos de origem. Cada execução recompõe as tabelas de destino com o snapshot atual.
+A estratÃ©gia `overwrite` foi escolhida porque os arquivos representam uma fotografia completa da origem.
 
-Isso torna a carga idempotente do ponto de vista do conteúdo: executar novamente o mesmo conjunto de arquivos produz novamente o mesmo estado esperado da camada `raw`.
+Cada execuÃ§Ã£o recompÃµe as tabelas `raw` com o snapshot atual.
 
-## 7. Orquestração com Airflow
+Isso fornece comportamento idempotente para o conjunto de arquivos utilizado no POC.
 
-A DAG principal é:
+---
+
+## 7. OrquestraÃ§Ã£o com Airflow
+
+A DAG principal Ã©:
 
 ```text
 banvic_elt
@@ -208,132 +279,146 @@ Arquivo:
 dags/banvic_elt.py
 ```
 
-### Fluxo da DAG
+### Agendamento
 
 ```text
-validate_source_files
-        │
-        ▼
-   run_meltano
-        │
-        ▼
-validate_destination
+0 6 * * *
 ```
 
-### Task 1 — `validate_source_files`
+A DAG utiliza:
 
-Responsabilidades:
+```text
+catchup = False
+max_active_runs = 1
+max_active_tasks = 2
+```
 
-- verificar se os sete arquivos existem;
-- ler os CSVs;
-- contar os registros;
-- gerar os quantitativos esperados para a etapa seguinte.
-
-Configuração de retry:
+O `default_args` utiliza:
 
 ```text
 retries = 2
 retry_delay = 1 minuto
 ```
 
-### Task 2 — `run_meltano`
-
-Responsabilidades:
-
-- validar a existência das variáveis de conexão;
-- executar:
+As tarefas de ingestÃ£o utilizam:
 
 ```text
-meltano run tap-csv target-postgres
-```
-
-- interromper a task caso o processo retorne erro.
-
-Configurações relevantes:
-
-```text
-retries = 2
-retry_delay = 1 minuto
 execution_timeout = 15 minutos
 ```
 
-### Task 3 — `validate_destination`
+### Fluxo real da DAG
 
-Responsabilidades:
-
-- verificar se o schema `raw` existe;
-- consultar a quantidade de registros de cada tabela;
-- comparar o resultado com os quantitativos calculados na origem;
-- falhar a task caso exista divergência.
-
-As três etapas são encadeadas diretamente:
+Cada arquivo possui um `FileSensor` prÃ³prio:
 
 ```text
-validação da origem
-        ↓
-ingestão
-        ↓
-validação do destino
+wait_for_clientes
+        â”‚
+        â–¼
+ingest_clientes
+
+wait_for_contas
+        â”‚
+        â–¼
+ingest_contas
+
+wait_for_transacoes
+        â”‚
+        â–¼
+ingest_transacoes
+
+wait_for_propostas_credito
+        â”‚
+        â–¼
+ingest_propostas_credito
+
+wait_for_colaboradores
+        â”‚
+        â–¼
+ingest_colaboradores
+
+wait_for_agencias
+        â”‚
+        â–¼
+ingest_agencias
+
+wait_for_colaborador_agencia
+        â”‚
+        â–¼
+ingest_colaborador_agencia
 ```
 
-## 8. Confiabilidade e tratamento de falhas
-
-O POC inclui mecanismos básicos de confiabilidade.
-
-### Retries
-
-As tasks principais possuem até duas novas tentativas:
+Ao final:
 
 ```text
-retries = 2
-retry_delay = 1 minuto
+ingestÃµes
+    â”‚
+    â–¼
+summarize_ingestion
 ```
 
-Isso permite recuperar falhas transitórias sem intervenção manual imediata.
-
-### Timeout
-
-A execução do Meltano possui timeout de 15 minutos:
+A DAG possui 15 tarefas:
 
 ```text
-execution_timeout = 15 minutes
+7 FileSensors
+7 tarefas de ingestÃ£o
+1 tarefa de resumo
 ```
 
-### Idempotência
+---
 
-O loader PostgreSQL está configurado com:
+## 8. FileSensors
+
+Cada tabela possui um `FileSensor` configurado com:
 
 ```text
-load_method: overwrite
+fs_conn_id = fs_default
+poke_interval = 30 segundos
+timeout = 600 segundos
+mode = reschedule
 ```
 
-Como os dados são tratados como snapshot completo, uma nova execução do mesmo pipeline recompõe o estado esperado das tabelas `raw`.
-
-Além disso, a DAG limita a execução concorrente:
+O `filepath` utiliza apenas o nome do arquivo, por exemplo:
 
 ```text
-max_active_runs = 1
-max_active_tasks = 1
+clientes.csv
 ```
 
-### Validação de origem
+A conexÃ£o `fs_default` aponta para:
 
-A pipeline não inicia a ingestão sem antes confirmar a presença dos sete arquivos.
+```text
+/opt/airflow/data/raw
+```
 
-### Validação de destino
+Somente o Scheduler recebe o volume dos arquivos e as credenciais necessÃ¡rias Ã  ingestÃ£o.
 
-Ao final da carga, a DAG compara as contagens da origem com as tabelas de destino.
+---
+
+## 9. ValidaÃ§Ãµes da pipeline
+
+Antes da ingestÃ£o, cada tarefa:
+
+1. verifica a existÃªncia do arquivo;
+2. calcula a quantidade de registros da origem;
+3. valida a presenÃ§a das variÃ¡veis de conexÃ£o;
+4. executa o Meltano.
+
+ApÃ³s a ingestÃ£o:
+
+1. consulta o PostgreSQL atravÃ©s de `PostgresHook`;
+2. conta os registros da tabela `raw`;
+3. compara origem e destino;
+4. falha caso os quantitativos sejam diferentes.
 
 Exemplo:
 
 ```text
-source transacoes = 71.999
+source transacoes      = 71.999
 destination transacoes = 71.999
 ```
 
-Uma divergência faz a task falhar.
+---
 
-## 9. PostgreSQL
+## 10. PostgreSQL
 
 O PostgreSQL roda no namespace:
 
@@ -341,7 +426,7 @@ O PostgreSQL roda no namespace:
 banvic
 ```
 
-Serviço Kubernetes:
+ServiÃ§o:
 
 ```text
 banvic-postgres
@@ -353,18 +438,20 @@ Porta:
 5432
 ```
 
-O PostgreSQL hospeda:
-
-- database `banvic`, utilizado pela pipeline;
-- database `airflow`, utilizado pelos metadados do Airflow.
-
-O banco `banvic` possui o schema:
+O servidor possui:
 
 ```text
-raw
+database banvic
+database airflow
 ```
 
-As sete tabelas de destino são:
+O banco `banvic` contÃ©m:
+
+```text
+schema raw
+```
+
+Com as tabelas:
 
 ```text
 raw.agencias
@@ -376,15 +463,27 @@ raw.propostas_credito
 raw.transacoes
 ```
 
-A persistência do banco é feita com um PersistentVolumeClaim de 1 GiB.
+O PostgreSQL utiliza um PersistentVolume/PersistentVolumeClaim de:
 
-## 10. Modelo conceitual
+```text
+2 GiB
+```
 
-O modelo conceitual completo é apresentado abaixo:
+A persistÃªncia utiliza:
+
+```text
+/var/local/banvic-postgres-data
+```
+
+montado no node Kind.
+
+---
+
+## 11. Modelo conceitual
 
 ![Modelo Conceitual de Dados](docs/banvic_modelo_conceitual.png)
 
-As principais entidades são:
+Principais entidades:
 
 ```text
 CLIENTES
@@ -424,90 +523,173 @@ AGENCIAS
   PK: cod_agencia
 
 COLABORADOR_AGENCIA
-  PK/FK: cod_colaborador
-  FK: cod_agencia
+  PK composta:
+    cod_colaborador
+    cod_agencia
 ```
 
-Os relacionamentos apresentados no diagrama são derivados das chaves estrangeiras presentes nas entidades.
+A camada `raw` nÃ£o depende da criaÃ§Ã£o de constraints relacionais para realizar a ingestÃ£o.
 
-A camada `raw` foi mantida simples para o objetivo do POC e não depende da criação de constraints relacionais para realizar a ingestão.
+---
 
-## 11. Infraestrutura como código
+## 12. Infraestrutura como cÃ³digo
 
-A infraestrutura é declarada no repositório e pode ser recriada com:
+A infraestrutura atual utiliza Terraform como fonte de verdade.
 
-- Kind;
-- manifests Kubernetes;
-- Helm;
-- scripts PowerShell.
+### Cluster
 
-### Kind
-
-Configuração:
+DiretÃ³rio:
 
 ```text
-infra/kind/cluster.yaml
+terraform/cluster/
 ```
 
-O cluster utiliza uma imagem de node Kubernetes fixada:
+O Terraform cria o cluster Kind utilizando:
 
 ```text
 kindest/node:v1.35.8
 ```
 
-### Kubernetes
+com digest fixado.
 
-Os recursos principais estão em:
+O node recebe os seguintes mounts:
 
 ```text
-infra/namespace.yaml
-infra/postgres/
+data/raw
+runtime/airflow-logs
+runtime/postgres-data
+```
+
+### Plataforma
+
+DiretÃ³rio:
+
+```text
+terraform/platform/
+```
+
+A plataforma provisiona:
+
+```text
+namespace
+PostgreSQL
+Service PostgreSQL
+PersistentVolumes
+PersistentVolumeClaims
+Secrets
+Job de inicializaÃ§Ã£o do PostgreSQL
+Airflow via Helm
+Job de criaÃ§Ã£o do usuÃ¡rio administrativo do Airflow
 ```
 
 ### Airflow
 
-O deploy é feito pelo Helm chart do Apache Airflow usando:
+A imagem customizada Ã©:
 
 ```text
-infra/airflow/values.yaml
+banvic-airflow:2.1.0
 ```
 
-A configuração utiliza:
+O Terraform calcula hashes do:
 
 ```text
-LocalExecutor
+Dockerfile
+requirements.txt
+DAG
+meltano.yml
+csv_files_definition.json
 ```
 
-e desabilita componentes não necessários para este POC.
+para reconstruir a imagem quando componentes relevantes forem alterados.
 
-O banco de metadados do Airflow utiliza o database:
+A imagem Ã© carregada diretamente no cluster Kind.
+
+---
+
+## 13. PersistÃªncia
+
+HÃ¡ trÃªs volumes persistentes principais:
 
 ```text
-airflow
+PostgreSQL:
+2 GiB
+
+Airflow logs:
+2 GiB
+
+CSV raw:
+10 MiB
 ```
 
-enquanto os dados da pipeline permanecem no database:
+### Airflow logs
+
+Os logs sÃ£o persistidos em:
 
 ```text
-banvic
+/var/local/airflow-logs
 ```
 
-## 12. Secrets e credenciais
-
-Credenciais não são versionadas no Git.
-
-O projeto utiliza Kubernetes Secrets para:
+atravÃ©s do PVC:
 
 ```text
-banvic-postgres-secret
+airflow-logs-pvc
+```
+
+### CSVs
+
+Os arquivos de origem ficam fora da imagem Docker e sÃ£o montados no Scheduler em:
+
+```text
+/opt/airflow/data/raw
+```
+
+O volume Ã© montado como somente leitura.
+
+---
+
+## 14. Secrets e credenciais
+
+As credenciais sÃ£o geradas e gerenciadas pelo Terraform utilizando Kubernetes Secrets.
+
+Principais Secrets:
+
+```text
+banvic-postgres-admin
+banvic-postgres-ingest
 airflow-metadata
+banvic-airflow-ingest
 airflow-api-static-secret
+airflow-jwt-secret
 airflow-admin-secret
+airflow-fernet
+airflow-filesystem
 ```
 
-Os Secrets são criados pelo script `bootstrap.ps1` quando ainda não existem.
+O usuÃ¡rio usado pela pipeline Ã©:
 
-O `.gitignore` exclui arquivos locais de ambiente e credenciais:
+```text
+banvic_ingest
+```
+
+Ele nÃ£o Ã© o usuÃ¡rio administrativo do PostgreSQL.
+
+O Scheduler recebe as credenciais do usuÃ¡rio de ingestÃ£o atravÃ©s do Secret:
+
+```text
+banvic-airflow-ingest
+```
+
+A DAG utiliza a conexÃ£o:
+
+```text
+banvic_postgres
+```
+
+por meio do `PostgresHook`.
+
+As senhas nÃ£o sÃ£o armazenadas no Git.
+
+O `.gitignore` exclui:
 
 ```text
 .env
@@ -517,46 +699,80 @@ O `.gitignore` exclui arquivos locais de ambiente e credenciais:
 *.pem
 ```
 
-O repositório não deve conter senhas, tokens ou chaves privadas.
+TambÃ©m sÃ£o excluÃ­dos arquivos de estado e artefatos locais do Terraform.
 
-## 13. Bootstrap do ambiente
+---
 
-O script:
+## 15. Controle de acesso
+
+O PostgreSQL Ã© inicializado pelo Terraform atravÃ©s do arquivo:
+
+```text
+terraform/platform/postgres-init.tf
+```
+
+SÃ£o criados:
+
+```text
+airflow
+banvic_ingest
+```
+
+O acesso pÃºblico aos databases Ã© revogado.
+
+O usuÃ¡rio `banvic_ingest` recebe:
+
+```text
+CONNECT
+TEMPORARY
+USAGE
+CREATE
+```
+
+no contexto necessÃ¡rio Ã  ingestÃ£o.
+
+O schema:
+
+```text
+raw
+```
+
+Ã© propriedade de:
+
+```text
+banvic_ingest
+```
+
+---
+
+## 16. Bootstrap
+
+O provisionamento completo Ã© feito pelo:
 
 ```text
 scripts/bootstrap.ps1
 ```
 
-automatiza o provisionamento.
+O script:
 
-Ele:
+1. valida Docker, kubectl, Kind, Helm e Terraform;
+2. inicializa e aplica o Terraform do cluster;
+3. inicializa e aplica o Terraform da plataforma;
+4. aguarda os recursos principais;
+5. exibe o estado dos pods;
+6. informa como acessar o Airflow.
 
-1. valida Docker, kubectl, Kind e Helm;
-2. cria o cluster Kind caso necessário;
-3. cria o namespace `banvic`;
-4. cria ou reutiliza as credenciais do PostgreSQL;
-5. aplica PostgreSQL, Service e PVC;
-6. cria ou reutiliza o banco de metadados do Airflow;
-7. cria ou reutiliza o API secret do Airflow;
-8. garante a existência do schema `raw`;
-9. cria ou reutiliza a credencial do usuário admin;
-10. constrói a imagem customizada do Airflow;
-11. carrega a imagem no Kind;
-12. configura o repositório Helm;
-13. instala ou atualiza o Airflow;
-14. cria o usuário admin caso ainda não exista.
-
-### Execução
-
-No PowerShell:
+### ExecuÃ§Ã£o
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 ```
 
-O script foi projetado para ser reutilizável: recursos já existentes são reaproveitados e os Secrets existentes são preservados.
+O processo Ã© idempotente do ponto de vista da infraestrutura declarada: recursos existentes sÃ£o mantidos pelo estado do Terraform e modificaÃ§Ãµes necessÃ¡rias sÃ£o aplicadas pelo Terraform.
 
-## 14. Verificação do ambiente
+---
+
+## 17. VerificaÃ§Ã£o
 
 O script:
 
@@ -564,45 +780,29 @@ O script:
 scripts/verify.ps1
 ```
 
-faz uma validação do ambiente sem modificar a infraestrutura.
+faz uma validaÃ§Ã£o sem modificar a infraestrutura.
 
 Ele verifica:
 
-- pods esperados;
-- estado `Ready` dos containers;
-- `Airflow parallelism`;
-- presença da DAG `banvic_elt`;
-- existência do schema `raw`;
-- quantidade de registros nas sete tabelas;
-- últimas execuções da DAG.
+```text
+pods principais
+containers Ready
+Airflow parallelism
+existÃªncia da DAG
+existÃªncia do schema raw
+contagem das sete tabelas
+Ãºltimas execuÃ§Ãµes da DAG
+```
 
-Executar:
+### ExecuÃ§Ã£o
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 ```
 
-Uma execução válida termina com:
+---
 
-```text
-=== Resultado ===
-Verificação concluída.
-```
-
-## 15. Execução da DAG
-
-A DAG utiliza configuração de execução manual:
-
-```text
-schedule = None
-catchup = False
-max_active_runs = 1
-max_active_tasks = 1
-```
-
-O agendamento manual foi escolhido para o POC, permitindo demonstrar a execução controlada pelo avaliador.
-
-### Acesso ao Airflow
+## 18. Acesso ao Airflow
 
 Execute:
 
@@ -616,65 +816,129 @@ Depois acesse:
 http://localhost:8080
 ```
 
-Usuário:
+UsuÃ¡rio:
 
 ```text
 admin
 ```
 
-A senha fica armazenada no Kubernetes Secret:
+A senha Ã© armazenada no Secret:
 
 ```text
 airflow-admin-secret
 ```
 
-## 16. Consultando os dados
+---
+
+## 19. ExecuÃ§Ã£o manual da DAG
+
+A DAG pode ser executada pela interface do Airflow ou atravÃ©s do CLI:
+
+```powershell
+kubectl exec -n banvic airflow-scheduler-0 -c scheduler -- `
+  airflow dags trigger banvic_elt
+```
+
+Para consultar as execuÃ§Ãµes:
+
+```powershell
+kubectl exec -n banvic airflow-scheduler-0 -c scheduler -- `
+  airflow dags list-runs banvic_elt
+```
+
+Para consultar as tasks de uma execuÃ§Ã£o:
+
+```powershell
+kubectl exec -n banvic airflow-scheduler-0 -c scheduler -- `
+  airflow tasks states-for-dag-run `
+  banvic_elt `
+  manual__YYYY-MM-DDTHH:MM:SS.ssssss+00:00
+```
+
+---
+
+## 20. Consultando os dados
 
 Para acessar o PostgreSQL:
 
 ```powershell
-kubectl exec -it deploy/banvic-postgres -n banvic -- psql -U banvic -d banvic
+kubectl exec -it deploy/banvic-postgres -n banvic -- `
+  psql -U banvic -d banvic
 ```
 
 Exemplo:
 
 ```sql
-SELECT COUNT(*) FROM raw.transacoes;
+SELECT COUNT(*)
+FROM raw.transacoes;
 ```
 
-Resultado esperado no dataset utilizado neste POC:
+Resultado esperado:
 
 ```text
 71999
 ```
 
-Outra consulta útil:
+Consulta completa:
 
 ```sql
 SELECT
     'agencias' AS tabela,
     COUNT(*) AS registros
 FROM raw.agencias
+
 UNION ALL
-SELECT 'clientes', COUNT(*) FROM raw.clientes
+
+SELECT
+    'clientes',
+    COUNT(*)
+FROM raw.clientes
+
 UNION ALL
-SELECT 'colaborador_agencia', COUNT(*) FROM raw.colaborador_agencia
+
+SELECT
+    'colaborador_agencia',
+    COUNT(*)
+FROM raw.colaborador_agencia
+
 UNION ALL
-SELECT 'colaboradores', COUNT(*) FROM raw.colaboradores
+
+SELECT
+    'colaboradores',
+    COUNT(*)
+FROM raw.colaboradores
+
 UNION ALL
-SELECT 'contas', COUNT(*) FROM raw.contas
+
+SELECT
+    'contas',
+    COUNT(*)
+FROM raw.contas
+
 UNION ALL
-SELECT 'propostas_credito', COUNT(*) FROM raw.propostas_credito
+
+SELECT
+    'propostas_credito',
+    COUNT(*)
+FROM raw.propostas_credito
+
 UNION ALL
-SELECT 'transacoes', COUNT(*) FROM raw.transacoes
+
+SELECT
+    'transacoes',
+    COUNT(*)
+FROM raw.transacoes
+
 ORDER BY tabela;
 ```
 
-## 17. Resultado da validação
+---
 
-O ambiente foi validado após a execução do bootstrap e do script de verificação.
+## 21. Resultado da validaÃ§Ã£o
 
-### Pods principais
+A soluÃ§Ã£o foi executada e validada em ambiente Kind.
+
+### Componentes principais
 
 ```text
 airflow-api-server       Running / Ready
@@ -683,13 +947,29 @@ airflow-scheduler        Running / Ready
 banvic-postgres          Running / Ready
 ```
 
-### Configuração de paralelismo
+### Paralelismo
 
 ```text
 Airflow parallelism = 2
 ```
 
-### Quantidade de registros validada
+### Resultado da DAG
+
+A execuÃ§Ã£o validada apresentou:
+
+```text
+15 / 15 tasks = success
+```
+
+DistribuÃ­das em:
+
+```text
+7 FileSensors
+7 ingestÃµes
+1 summarize_ingestion
+```
+
+### Quantidade de registros
 
 | Tabela | Registros |
 |---|---:|
@@ -701,63 +981,69 @@ Airflow parallelism = 2
 | `raw.propostas_credito` | 2.000 |
 | `raw.transacoes` | 71.999 |
 
-Também foram observadas execuções bem-sucedidas da DAG durante a validação do projeto.
+---
 
-## 18. Observações sobre qualidade dos dados
+## 22. Qualidade dos dados
 
-As validações exploratórias realizadas durante o desenvolvimento encontraram alguns pontos relevantes no dataset:
+Durante as validaÃ§Ãµes exploratÃ³rias foram observados alguns pontos do dataset:
 
-- existe referência ao cliente `528` em dados transacionais/de crédito, embora esse cliente não esteja presente em `clientes.csv`;
-- foram encontrados quatro emails duplicados na base de clientes.
+- existe referÃªncia ao cliente `528` em dados transacionais/de crÃ©dito, embora esse cliente nÃ£o esteja presente em `clientes.csv`;
+- existem quatro emails duplicados na base de clientes.
 
-Esses pontos foram preservados no `raw`, em vez de serem descartados ou corrigidos silenciosamente.
+Esses registros foram preservados na camada `raw`.
 
-A decisão é coerente com a função da camada `raw`: preservar a origem e permitir que regras de qualidade, tratamento e modelagem sejam aplicadas em camadas posteriores.
+A decisÃ£o Ã© intencional: a camada `raw` mantÃ©m os dados da origem sem correÃ§Ãµes silenciosas. Regras de qualidade, tratamento e modelagem podem ser aplicadas em camadas posteriores.
 
-## 19. Limitações e próximos passos
+---
 
-Este projeto é um POC, portanto algumas decisões foram deliberadamente simplificadas.
+## 23. LimitaÃ§Ãµes e prÃ³ximos passos
 
-Possíveis evoluções:
+Este projeto Ã© um POC e algumas decisÃµes foram deliberadamente simplificadas.
+
+PossÃ­veis evoluÃ§Ãµes:
 
 - adicionar uma camada `staging` com dbt;
-- criar modelos analíticos e dimensões/fatos;
-- implementar testes de qualidade adicionais;
-- adicionar validações de schema e tipos;
-- separar metadata database e target database em instâncias independentes;
-- utilizar armazenamento externo para arquivos em vez de empacotá-los na imagem;
-- implementar carga incremental quando a fonte disponibilizar chave/coluna de alteração confiável;
-- utilizar um executor distribuído caso o volume de dados cresça;
-- adicionar observabilidade com métricas e dashboards;
-- adicionar CI/CD para validação automática dos manifests, DAG e imagem;
-- utilizar um Secret Manager externo em ambientes produtivos.
+- criar modelos dimensionais e fatos;
+- implementar testes de qualidade mais completos;
+- adicionar validaÃ§Ãµes de schema;
+- separar fisicamente os databases de metadata e dados;
+- utilizar armazenamento externo para os arquivos de origem;
+- implementar carga incremental;
+- utilizar executor distribuÃ­do para maiores volumes;
+- adicionar observabilidade com mÃ©tricas e dashboards;
+- implementar CI/CD;
+- utilizar Secret Manager externo em ambiente produtivo.
 
-## 20. Reprodução rápida
+---
 
-### Pré-requisitos
+## 24. ReproduÃ§Ã£o completa
+
+### PrÃ©-requisitos
 
 ```text
 Docker Desktop
 kubectl
 Kind
 Helm
+Terraform >= 1.6
 PowerShell
+Git
 ```
 
-Clone o repositório:
+Clone o repositÃ³rio:
 
 ```powershell
 git clone https://github.com/vitorturcisn/banvic-data-engineering.git
 cd banvic-data-engineering
 ```
 
-Execute o bootstrap:
+Execute:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 ```
 
-Valide:
+Depois valide:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1
@@ -775,33 +1061,34 @@ Abra:
 http://localhost:8080
 ```
 
-Execute manualmente a DAG `banvic_elt` e acompanhe:
+---
 
-```text
-validate_source_files
-        ↓
-run_meltano
-        ↓
-validate_destination
-```
-
-## 21. Entregáveis principais
-
-Os principais artefatos deste POC são:
+## 25. EntregÃ¡veis principais
 
 ```text
 dags/banvic_elt.py
-infra/
+
+airflow/
+  Dockerfile
+  requirements.txt
+  values.yaml
+
 meltano/
+  meltano.yml
+  config/
+  *_lock.yml
+
+terraform/
+  cluster/
+  platform/
+
 data/raw/
+
 docs/
-scripts/bootstrap.ps1
-scripts/verify.ps1
+
+scripts/
+  bootstrap.ps1
+  verify.ps1
+
 README.md
 ```
-
-## 22. Repositório
-
-GitHub:
-
-https://github.com/vitorturcisn/banvic-data-engineering
