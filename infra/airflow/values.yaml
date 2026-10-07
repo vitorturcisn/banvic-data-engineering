@@ -1,73 +1,72 @@
-airflowVersion: "3.2.2"
+﻿airflowVersion: "3.2.2"
+
 defaultAirflowRepository: banvic-airflow
-defaultAirflowTag: "1.0.2"
-
-apiSecretKeySecretName: airflow-api-static-secret
-
-extraEnv: |
-  - name: TARGET_POSTGRES_HOST
-    value: banvic-postgres.banvic.svc.cluster.local
-  - name: TARGET_POSTGRES_PORT
-    value: "5432"
-  - name: TARGET_POSTGRES_DATABASE
-    valueFrom:
-      secretKeyRef:
-        name: banvic-postgres-secret
-        key: POSTGRES_DB
-  - name: TARGET_POSTGRES_USER
-    valueFrom:
-      secretKeyRef:
-        name: banvic-postgres-secret
-        key: POSTGRES_USER
-  - name: TARGET_POSTGRES_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: banvic-postgres-secret
-        key: POSTGRES_PASSWORD
-  - name: AIRFLOW__CORE__PARALLELISM
-    value: "2"
+defaultAirflowTag: "2.1.0"
 
 executor: LocalExecutor
 
-# Usar o PostgreSQL que já existe no namespace banvic
+apiSecretKeySecretName: airflow-api-static-secret
+jwtSecretName: airflow-jwt-secret
+fernetKeySecretName: airflow-fernet
+
+extraEnv: |
+  - name: AIRFLOW__CORE__PARALLELISM
+    value: "2"
+
+  - name: AIRFLOW__CORE__LOAD_EXAMPLES
+    value: "False"
+
+  - name: AIRFLOW__CORE__AUTH_MANAGER
+    value: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+
 postgresql:
   enabled: false
 
-# Não precisamos de Redis com LocalExecutor
 redis:
   enabled: false
 
-# Não precisamos de PgBouncer nesta POC local
 pgbouncer:
   enabled: false
 
-# Banco de metadados externo
 data:
   metadataSecretName: airflow-metadata
 
-# Não criar usuário padrão admin/admin
 createUserJob:
   enabled: false
   defaultUser:
     enabled: false
 
-# DAGs são incorporadas à imagem customizada do Airflow
+migrateDatabaseJob:
+  enabled: true
+  useHelmHooks: false
+  applyCustomEnv: false
+
+  env:
+   - name: AIRFLOW__CORE__AUTH_MANAGER
+     value: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+
 dags:
   persistence:
     enabled: false
   gitSync:
     enabled: false
 
-# Sem armazenamento persistente de logs nesta POC
 logs:
   persistence:
-    enabled: false
+    enabled: true
+    existingClaim: airflow-logs-pvc
 
-# Não precisaremos de Triggerer inicialmente
 triggerer:
   enabled: false
 
-# Recursos reduzidos para o ambiente local
 apiServer:
   startupProbe:
     initialDelaySeconds: 0
@@ -98,12 +97,61 @@ scheduler:
     periodSeconds: 60
 
   resources:
-    requests:
-      cpu: "100m"
-      memory: "384Mi"
     limits:
-      cpu: "500m"
-      memory: "768Mi"
+      cpu: "2"
+      memory: 1536Mi
+    requests:
+      cpu: 500m
+      memory: 768Mi
+
+  env:
+    # Connection usada pelo PostgresHook na DAG.
+    - name: AIRFLOW_CONN_BANVIC_POSTGRES
+      valueFrom:
+        secretKeyRef:
+          name: banvic-airflow-ingest
+          key: AIRFLOW_CONN_BANVIC_POSTGRES
+
+    # Connection usada pelos FileSensors.
+    - name: AIRFLOW_CONN_FS_DEFAULT
+      valueFrom:
+        secretKeyRef:
+          name: airflow-filesystem
+          key: connection
+
+    # Variáveis consumidas pelo target-postgres do Meltano.
+    # Disponibilizadas somente no Scheduler.
+    - name: TARGET_POSTGRES_HOST
+      value: banvic-postgres.banvic.svc.cluster.local
+
+    - name: TARGET_POSTGRES_PORT
+      value: "5432"
+
+    - name: TARGET_POSTGRES_DATABASE
+      value: banvic
+
+    - name: TARGET_POSTGRES_USER
+      valueFrom:
+        secretKeyRef:
+          name: banvic-postgres-ingest
+          key: POSTGRES_USER
+
+    - name: TARGET_POSTGRES_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: banvic-postgres-ingest
+          key: POSTGRES_PASSWORD
+
+  # Somente o Scheduler precisa acessar os CSVs.
+  extraVolumes:
+    - name: banvic-raw-data
+      persistentVolumeClaim:
+        claimName: banvic-raw-data-pvc
+
+  extraVolumeMounts:
+    - name: banvic-raw-data
+      mountPath: /opt/airflow/data/raw
+      readOnly: true
 
 dagProcessor:
   resources:

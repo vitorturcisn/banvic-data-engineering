@@ -33,3 +33,12 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+# Terraform generated files
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.tfplan
+# Local runtime data
+runtime/

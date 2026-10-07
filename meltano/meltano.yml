@@ -14,14 +14,222 @@ plugins:
     - name: tap-csv
       variant: meltanolabs
       pip_url: git+https://github.com/MeltanoLabs/tap-csv.git
+
       config:
         csv_files_definition: config/csv_files_definition.json
         add_metadata_columns: true
+
+      schema:
+        clientes:
+          cod_cliente:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          primeiro_nome:
+            type: ["string", "null"]
+          ultimo_nome:
+            type: ["string", "null"]
+          email:
+            type: ["string", "null"]
+          tipo_cliente:
+            type: ["string", "null"]
+          data_inclusao:
+            type: ["string", "null"]
+            format: date-time
+          cpfcnpj:
+            type: ["string", "null"]
+          data_nascimento:
+            type: ["string", "null"]
+            format: date
+          endereco:
+            type: ["string", "null"]
+          cep:
+            type: ["string", "null"]
+
+        contas:
+          num_conta:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          cod_cliente:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          cod_agencia:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          cod_colaborador:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          tipo_conta:
+            type: ["string", "null"]
+          data_abertura:
+            type: ["string", "null"]
+            format: date-time
+          saldo_total:
+            type: ["number", "null"]
+          saldo_disponivel:
+            type: ["number", "null"]
+          data_ultimo_lancamento:
+            type: ["string", "null"]
+            format: date-time
+
+        transacoes:
+          cod_transacao:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          num_conta:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          data_transacao:
+            type: ["string", "null"]
+            format: date-time
+          nome_transacao:
+            type: ["string", "null"]
+          valor_transacao:
+            type: ["number", "null"]
+
+        propostas_credito:
+          cod_proposta:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          cod_cliente:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          cod_colaborador:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          data_entrada_proposta:
+            type: ["string", "null"]
+            format: date-time
+          taxa_juros_mensal:
+            type: ["number", "null"]
+          valor_proposta:
+            type: ["number", "null"]
+          valor_financiamento:
+            type: ["number", "null"]
+          valor_entrada:
+            type: ["number", "null"]
+          valor_prestacao:
+            type: ["number", "null"]
+          quantidade_parcelas:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          carencia:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          status_proposta:
+            type: ["string", "null"]
+
+        colaboradores:
+          cod_colaborador:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          primeiro_nome:
+            type: ["string", "null"]
+          ultimo_nome:
+            type: ["string", "null"]
+          email:
+            type: ["string", "null"]
+          cpf:
+            type: ["string", "null"]
+          data_nascimento:
+            type: ["string", "null"]
+            format: date
+          endereco:
+            type: ["string", "null"]
+          cep:
+            type: ["string", "null"]
+
+        agencias:
+          cod_agencia:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          nome:
+            type: ["string", "null"]
+          endereco:
+            type: ["string", "null"]
+          cidade:
+            type: ["string", "null"]
+          uf:
+            type: ["string", "null"]
+          data_abertura:
+            type: ["string", "null"]
+            format: date
+          tipo_agencia:
+            type: ["string", "null"]
+
+        colaborador_agencia:
+          cod_colaborador:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+          cod_agencia:
+            type: ["integer", "null"]
+            x-sql-datatype: integer
+
+      select:
+        - clientes.cod_cliente
+        - clientes.primeiro_nome
+        - clientes.ultimo_nome
+        - clientes.email
+        - clientes.tipo_cliente
+        - clientes.data_inclusao
+        - clientes.cpfcnpj
+        - clientes.data_nascimento
+        - clientes.endereco
+        - clientes.cep
+
+        - contas.num_conta
+        - contas.cod_cliente
+        - contas.cod_agencia
+        - contas.cod_colaborador
+        - contas.tipo_conta
+        - contas.data_abertura
+        - contas.saldo_total
+        - contas.saldo_disponivel
+        - contas.data_ultimo_lancamento
+
+        - transacoes.cod_transacao
+        - transacoes.num_conta
+        - transacoes.data_transacao
+        - transacoes.nome_transacao
+        - transacoes.valor_transacao
+
+        - propostas_credito.cod_proposta
+        - propostas_credito.cod_cliente
+        - propostas_credito.cod_colaborador
+        - propostas_credito.data_entrada_proposta
+        - propostas_credito.taxa_juros_mensal
+        - propostas_credito.valor_proposta
+        - propostas_credito.valor_financiamento
+        - propostas_credito.valor_entrada
+        - propostas_credito.valor_prestacao
+        - propostas_credito.quantidade_parcelas
+        - propostas_credito.carencia
+        - propostas_credito.status_proposta
+
+        - colaboradores.cod_colaborador
+        - colaboradores.primeiro_nome
+        - colaboradores.ultimo_nome
+        - colaboradores.email
+        - colaboradores.cpf
+        - colaboradores.data_nascimento
+        - colaboradores.endereco
+        - colaboradores.cep
+
+        - agencias.cod_agencia
+        - agencias.nome
+        - agencias.endereco
+        - agencias.cidade
+        - agencias.uf
+        - agencias.data_abertura
+        - agencias.tipo_agencia
+
+        - colaborador_agencia.cod_colaborador
+        - colaborador_agencia.cod_agencia
 
   loaders:
     - name: target-postgres
       variant: meltanolabs
       pip_url: meltanolabs-target-postgres
+
       config:
         host: $TARGET_POSTGRES_HOST
         port: $TARGET_POSTGRES_PORT
@@ -32,3 +240,47 @@ plugins:
         load_method: overwrite
         validate_records: true
         activate_version: false
+
+        stream_maps:
+          clientes:
+            cod_cliente: int(cod_cliente) if cod_cliente else None
+            data_inclusao: "data_inclusao.replace(' UTC', 'Z').replace(' ', 'T') if data_inclusao else None"
+
+          contas:
+            num_conta: int(num_conta) if num_conta else None
+            cod_cliente: int(cod_cliente) if cod_cliente else None
+            cod_agencia: int(cod_agencia) if cod_agencia else None
+            cod_colaborador: int(cod_colaborador) if cod_colaborador else None
+            saldo_total: float(saldo_total) if saldo_total else None
+            saldo_disponivel: float(saldo_disponivel) if saldo_disponivel else None
+            data_abertura: "data_abertura.replace(' UTC', 'Z').replace(' ', 'T') if data_abertura else None"
+            data_ultimo_lancamento: "data_ultimo_lancamento.replace(' UTC', 'Z').replace(' ', 'T') if data_ultimo_lancamento else None"
+
+          transacoes:
+            cod_transacao: int(cod_transacao) if cod_transacao else None
+            num_conta: int(num_conta) if num_conta else None
+            valor_transacao: float(valor_transacao) if valor_transacao else None
+            data_transacao: "data_transacao.replace(' UTC', 'Z').replace(' ', 'T') if data_transacao else None"
+
+          propostas_credito:
+            cod_proposta: int(cod_proposta) if cod_proposta else None
+            cod_cliente: int(cod_cliente) if cod_cliente else None
+            cod_colaborador: int(cod_colaborador) if cod_colaborador else None
+            taxa_juros_mensal: float(taxa_juros_mensal) if taxa_juros_mensal else None
+            valor_proposta: float(valor_proposta) if valor_proposta else None
+            valor_financiamento: float(valor_financiamento) if valor_financiamento else None
+            valor_entrada: float(valor_entrada) if valor_entrada else None
+            valor_prestacao: float(valor_prestacao) if valor_prestacao else None
+            quantidade_parcelas: int(quantidade_parcelas) if quantidade_parcelas else None
+            carencia: int(carencia) if carencia else None
+            data_entrada_proposta: "data_entrada_proposta.replace(' UTC', 'Z').replace(' ', 'T') if data_entrada_proposta else None"
+
+          colaboradores:
+            cod_colaborador: int(cod_colaborador) if cod_colaborador else None
+
+          agencias:
+            cod_agencia: int(cod_agencia) if cod_agencia else None
+
+          colaborador_agencia:
+            cod_colaborador: int(cod_colaborador) if cod_colaborador else None
+            cod_agencia: int(cod_agencia) if cod_agencia else None
