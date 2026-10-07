@@ -124,41 +124,33 @@ banvic-data-engineering/
 │   ├── banvic_arquitetura.png
 │   └── banvic_modelo_conceitual.png
 │
-├── infra/airflow/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── values.yaml
-│
-├── kind/
-│   └── cluster.yaml
+├── infra/
+│   ├── airflow/
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── values.yaml
+│   │
+│   └── terraform/
+│       ├── cluster/
+│       │   ├── main.tf
+│       │   ├── variables.tf
+│       │   └── versions.tf
+│       │
+│       └── platform/
+│           ├── airflow.tf
+│           ├── namespace.tf
+│           ├── postgres.tf
+│           ├── postgres-init.tf
+│           ├── secrets.tf
+│           ├── storage.tf
+│           ├── variables.tf
+│           └── versions.tf
 │
 ├── meltano/
 │   ├── config/
 │   │   └── csv_files_definition.json
 │   ├── meltano.yml
 │   └── *_lock.yml
-│
-├── terraform/
-│   ├── cluster/
-│   │   ├── .terraform.lock.hcl
-│   │   ├── main.tf
-│   │   ├── outputs.tf
-│   │   ├── providers.tf
-│   │   ├── variables.tf
-│   │   └── versions.tf
-│   │
-│   └── platform/
-│       ├── .terraform.lock.hcl
-│       ├── airflow.tf
-│       ├── namespace.tf
-│       ├── postgres.tf
-│       ├── postgres-init.tf
-│       ├── providers.tf
-│       ├── random.tf
-│       ├── secrets.tf
-│       ├── storage.tf
-│       ├── variables.tf
-│       └── versions.tf
 │
 ├── scripts/
 │   ├── bootstrap.ps1
@@ -384,7 +376,7 @@ clientes.csv
 A conexão `fs_default` aponta para:
 
 ```text
-/opt/infra/airflow/data/raw
+/opt/airflow/data/raw
 ```
 
 Somente o Scheduler recebe o volume dos arquivos e as credenciais necessárias à ingestão.
@@ -638,7 +630,7 @@ airflow-logs-pvc
 Os arquivos de origem ficam fora da imagem Docker e são montados no Scheduler em:
 
 ```text
-/opt/infra/airflow/data/raw
+/opt/airflow/data/raw
 ```
 
 O volume é montado como somente leitura.
@@ -833,21 +825,21 @@ airflow-admin-secret
 A DAG pode ser executada pela interface do Airflow ou através do CLI:
 
 ```powershell
-kubectl exec -n banvic airflow-scheduler-0 -c scheduler -- `
+kubectl exec -n banvic deploy/banvic-airflow-scheduler -- `
   airflow dags trigger banvic_elt
 ```
 
 Para consultar as execuções:
 
 ```powershell
-kubectl exec -n banvic airflow-scheduler-0 -c scheduler -- `
-  airflow dags list-runs banvic_elt
+kubectl exec -n banvic deploy/banvic-airflow-scheduler -- `
+  airflow dags list-runs -d banvic_elt
 ```
 
 Para consultar as tasks de uma execução:
 
 ```powershell
-kubectl exec -n banvic airflow-scheduler-0 -c scheduler -- `
+kubectl exec -n banvic deploy/banvic-airflow-scheduler -- `
   airflow tasks states-for-dag-run `
   banvic_elt `
   manual__YYYY-MM-DDTHH:MM:SS.ssssss+00:00
@@ -861,7 +853,7 @@ Para acessar o PostgreSQL:
 
 ```powershell
 kubectl exec -it deploy/banvic-postgres -n banvic -- `
-  psql -U banvic -d banvic
+  psql -U banvic_ingest -d banvic
 ```
 
 Exemplo:
@@ -1076,7 +1068,7 @@ meltano/
   config/
   *_lock.yml
 
-terraform/
+infra/terraform/
   cluster/
   platform/
 
@@ -1088,5 +1080,6 @@ scripts/
   bootstrap.ps1
   verify.ps1
 
+1_GITHUB.txt
 README.md
 ```
