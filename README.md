@@ -1093,15 +1093,3 @@ scripts/
 
 README.md
 ```
-
----
-
-## 26. Repositório
-
-GitHub:
-
-https://github.com/vitorturcisn/banvic-data-engineering
-
-Vídeo:
-
-https://youtu.be/QA-zR2TDtf8?si=kAAeJeTxxFjw9usd
