@@ -3,8 +3,8 @@
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
 
-$ClusterDir = Join-Path $ProjectRoot "terraform\cluster"
-$PlatformDir = Join-Path $ProjectRoot "terraform\platform"
+$ClusterDir = Join-Path $ProjectRoot "infra\terraform\cluster"
+$PlatformDir = Join-Path $ProjectRoot "infra\terraform\platform"
 
 function Write-Step {
     param([string]$Message)
