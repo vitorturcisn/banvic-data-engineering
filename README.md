@@ -121,7 +121,7 @@ banvic-data-engineering/
 │       └── transacoes.csv
 │
 ├── docs/
-│   ├── /arquitetura_banvic.png
+│   ├── arquitetura_banvic.png
 │   └── banvic_modelo_conceitual.png
 │
 ├── infra/
