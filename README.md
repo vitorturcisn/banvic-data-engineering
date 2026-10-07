@@ -31,7 +31,7 @@ O objetivo deste POC é demonstrar uma solução reprodutível de Engenharia de 
 
 ## 2. Arquitetura
 
-![Arquitetura da Plataforma do POC](docs/banvic_arquitetura.png)
+![Arquitetura da Plataforma do POC](docs/arquitetura_banvic.png)
 
 ### Fluxo da plataforma
 
