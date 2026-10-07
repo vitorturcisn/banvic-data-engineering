@@ -132,15 +132,21 @@ banvic-data-engineering/
 │   │
 │   └── terraform/
 │       ├── cluster/
+│       │   ├── .terraform.lock.hcl
 │       │   ├── main.tf
+│       │   ├── outputs.tf
+│       │   ├── providers.tf
 │       │   ├── variables.tf
 │       │   └── versions.tf
 │       │
 │       └── platform/
+│           ├── .terraform.lock.hcl
 │           ├── airflow.tf
 │           ├── namespace.tf
 │           ├── postgres.tf
 │           ├── postgres-init.tf
+│           ├── providers.tf
+│           ├── random.tf
 │           ├── secrets.tf
 │           ├── storage.tf
 │           ├── variables.tf
@@ -825,21 +831,21 @@ airflow-admin-secret
 A DAG pode ser executada pela interface do Airflow ou através do CLI:
 
 ```powershell
-kubectl exec -n banvic deploy/banvic-airflow-scheduler -- `
+kubectl exec -n banvic airflow-scheduler-0 -c scheduler -- `
   airflow dags trigger banvic_elt
 ```
 
 Para consultar as execuções:
 
 ```powershell
-kubectl exec -n banvic deploy/banvic-airflow-scheduler -- `
-  airflow dags list-runs -d banvic_elt
+kubectl exec -n banvic airflow-scheduler-0 -c scheduler -- `
+  airflow dags list-runs banvic_elt
 ```
 
 Para consultar as tasks de uma execução:
 
 ```powershell
-kubectl exec -n banvic deploy/banvic-airflow-scheduler -- `
+kubectl exec -n banvic airflow-scheduler-0 -c scheduler -- `
   airflow tasks states-for-dag-run `
   banvic_elt `
   manual__YYYY-MM-DDTHH:MM:SS.ssssss+00:00
@@ -1075,6 +1081,8 @@ infra/terraform/
 data/raw/
 
 docs/
+  arquitetura_banvic.png
+  banvic_modelo_conceitual.png
 
 scripts/
   bootstrap.ps1
