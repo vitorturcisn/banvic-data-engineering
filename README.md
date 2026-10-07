@@ -124,7 +124,7 @@ banvic-data-engineering/
 │   ├── banvic_arquitetura.png
 │   └── banvic_modelo_conceitual.png
 │
-├── airflow/
+├── infra/airflow/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── values.yaml
@@ -167,11 +167,8 @@ banvic-data-engineering/
 ├── .dockerignore
 ├── .gitignore
 ├── 1_GITHUB.txt
-├── 2_VIDEO.txt
 └── README.md
 ```
-
-> `kind/` pode ser removido após esta limpeza, pois a configuração do cluster Kind está atualmente declarada diretamente em `terraform/cluster/main.tf`.
 
 ---
 
@@ -387,7 +384,7 @@ clientes.csv
 A conexão `fs_default` aponta para:
 
 ```text
-/opt/airflow/data/raw
+/opt/infra/airflow/data/raw
 ```
 
 Somente o Scheduler recebe o volume dos arquivos e as credenciais necessárias à ingestão.
@@ -542,7 +539,7 @@ A infraestrutura atual utiliza Terraform como fonte de verdade.
 Diretório:
 
 ```text
-terraform/cluster/
+infra/terraform/cluster/
 ```
 
 O Terraform cria o cluster Kind utilizando:
@@ -566,7 +563,7 @@ runtime/postgres-data
 Diretório:
 
 ```text
-terraform/platform/
+infra/terraform/platform/
 ```
 
 A plataforma provisiona:
@@ -641,7 +638,7 @@ airflow-logs-pvc
 Os arquivos de origem ficam fora da imagem Docker e são montados no Scheduler em:
 
 ```text
-/opt/airflow/data/raw
+/opt/infra/airflow/data/raw
 ```
 
 O volume é montado como somente leitura.
@@ -709,7 +706,7 @@ Também são excluídos arquivos de estado e artefatos locais do Terraform.
 O PostgreSQL é inicializado pelo Terraform através do arquivo:
 
 ```text
-terraform/platform/postgres-init.tf
+infra/terraform/platform/postgres-init.tf
 ```
 
 São criados:
@@ -1069,7 +1066,7 @@ http://localhost:8080
 ```text
 dags/banvic_elt.py
 
-airflow/
+infra/airflow/
   Dockerfile
   requirements.txt
   values.yaml

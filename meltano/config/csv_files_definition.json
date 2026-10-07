@@ -50,7 +50,7 @@
   {
     "entity": "colaborador_agencia",
     "path": "../data/raw/colaborador_agencia.csv",
-    "keys": ["cod_colaborador"],
+    "keys": ["cod_colaborador", "cod_agencia"],
     "encoding": "UTF-8",
     "delimiter": ",",
     "strict": true
