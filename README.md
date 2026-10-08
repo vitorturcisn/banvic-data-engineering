@@ -714,7 +714,7 @@ airflow
 banvic_ingest
 ```
 
-O acesso público aos databases é revogado.
+Os privilégios padrão do role PUBLIC sobre os databases são revogados.
 
 O usuário `banvic_ingest` recebe:
 
@@ -1020,7 +1020,7 @@ Possíveis evoluções:
 Docker Desktop
 kubectl
 Kind
-Helm
+Helm >= 3.19.0
 Terraform >= 1.6
 PowerShell
 Git
