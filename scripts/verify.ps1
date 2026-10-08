@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
@@ -188,7 +188,7 @@ $rawSchema = kubectl exec `
     -n $Namespace `
     deploy/banvic-postgres `
     -- psql `
-    -U banvic `
+    -U banvic_ingest `
     -d banvic `
     -tAc `
     "SELECT 1 FROM information_schema.schemata WHERE schema_name='raw';"
@@ -240,7 +240,7 @@ $queryResult = kubectl exec `
     -n $Namespace `
     deploy/banvic-postgres `
     -- psql `
-    -U banvic `
+    -U banvic_ingest `
     -d banvic `
     -tA `
     -F "|" `
@@ -280,11 +280,65 @@ foreach ($tableName in $ExpectedCounts.Keys) {
 
 Write-Step "Últimas execuções da DAG"
 
-kubectl exec `
+$dagRunsJson = kubectl exec `
     -n $Namespace `
     airflow-scheduler-0 `
     -c scheduler `
-    -- airflow dags list-runs $DagId
+    -- airflow dags list-runs $DagId -o json
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Não foi possível consultar as execuções da DAG."
+}
+
+$dagRunsText = $dagRunsJson -join "`n"
+
+try {
+    $dagRuns = $dagRunsText | ConvertFrom-Json
+}
+catch {
+    throw "Não foi possível interpretar a saída JSON das execuções da DAG."
+}
+
+if ($dagRuns -is [System.Array]) {
+    $runs = @($dagRuns)
+}
+elseif ($dagRuns.dag_runs) {
+    $runs = @($dagRuns.dag_runs)
+}
+else {
+    $runs = @($dagRuns)
+}
+
+Assert-Ok `
+    ($runs.Count -gt 0) `
+    "Existe pelo menos uma execução da DAG"
+
+$latestRun = $runs |
+    Sort-Object {
+        if ($_.logical_date) {
+            [datetime]$_.logical_date
+        }
+        elseif ($_.start_date) {
+            [datetime]$_.start_date
+        }
+        else {
+            [datetime]::MinValue
+        }
+    } -Descending |
+    Select-Object -First 1
+
+Assert-Ok `
+    ($null -ne $latestRun) `
+    "Foi possível identificar a última execução da DAG"
+
+Write-Host ""
+Write-Host "Última execução:" -ForegroundColor Yellow
+Write-Host "Run ID : $($latestRun.dag_run_id)"
+Write-Host "Estado : $($latestRun.state)"
+
+Assert-Ok `
+    ($latestRun.state -eq "success") `
+    "Última execução da DAG banvic_elt = success"
 
 Write-Step "Resultado"
 
