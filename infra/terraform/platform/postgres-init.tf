@@ -5,13 +5,14 @@ resource "kubernetes_config_map_v1" "postgres_init" {
   }
 
   data = {
-    "init.sh" = <<-EOT
+    "init.sh" = replace(<<-EOT
       #!/bin/sh
       set -eu
 
       export PGPASSWORD="$POSTGRES_ADMIN_PASSWORD"
 
       echo "Aguardando PostgreSQL..."
+
       until pg_isready \
         -h "$POSTGRES_HOST" \
         -p "$POSTGRES_PORT" \
@@ -108,6 +109,7 @@ resource "kubernetes_config_map_v1" "postgres_init" {
 
       echo "Provisionamento do PostgreSQL concluído."
     EOT
+    , "\r\n", "\n")
   }
 
   depends_on = [kubernetes_namespace_v1.banvic]

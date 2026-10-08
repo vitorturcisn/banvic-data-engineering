@@ -95,34 +95,35 @@ resource "kubernetes_job_v1" "airflow_admin" {
           ]
 
           args = [
-            <<-EOT
-              set -euo pipefail
+            replace(<<-EOT
+                set -euo pipefail
 
-              echo "Aguardando o banco de metadados do Airflow..."
+                echo "Aguardando o banco de metadados do Airflow..."
 
-              until airflow db check; do
-                sleep 5
-              done
+                until airflow db check; do
+                  sleep 5
+                done
 
-              echo "Banco de metadados disponível."
+                echo "Banco de metadados disponível."
 
-              if airflow users list | grep -q "admin@banvic.local"; then
-                echo "Usuário admin já existe."
-                exit 0
-              fi
+                if airflow users list | grep -q "admin@banvic.local"; then
+                  echo "Usuário admin já existe."
+                  exit 0
+                fi
 
-              echo "Criando usuário admin..."
+                echo "Criando usuário admin..."
 
-              airflow users create \
-                --username admin \
-                --firstname Admin \
-                --lastname Banvic \
-                --role Admin \
-                --email admin@banvic.local \
-                --password "$AIRFLOW_ADMIN_PASSWORD"
+                airflow users create \
+                  --username admin \
+                  --firstname Admin \
+                  --lastname Banvic \
+                  --role Admin \
+                  --email admin@banvic.local \
+                  --password "$AIRFLOW_ADMIN_PASSWORD"
 
-              echo "Usuário admin criado."
-            EOT
+                echo "Usuário admin criado."
+              EOT
+            , "\r\n", "\n")
           ]
 
           env {
