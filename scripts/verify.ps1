@@ -1,3 +1,4 @@
+
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
@@ -76,7 +77,18 @@ Invoke-Kubectl @(
     $Namespace
 )
 
-$pods = kubectl get pods -n $Namespace -o json | ConvertFrom-Json
+$podsJson = kubectl get pods -n $Namespace -o json
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Não foi possível consultar os pods do namespace $Namespace."
+}
+
+try {
+    $pods = $podsJson | ConvertFrom-Json
+}
+catch {
+    throw "Não foi possível interpretar o JSON dos pods: $($_.Exception.Message)"
+}
 
 $expectedPodPrefixes = @(
     "airflow-api-server",
@@ -97,13 +109,15 @@ foreach ($prefix in $expectedPodPrefixes) {
         ($null -ne $pod) `
         "Pod $prefix existe"
 
-    $notReady = $pod.status.containerStatuses |
-        Where-Object {
-            $_.ready -ne $true
-        }
+    $notReady = @(
+        $pod.status.containerStatuses |
+            Where-Object {
+                $_.ready -ne $true
+            }
+    )
 
     Assert-Ok `
-        ($null -eq $notReady) `
+        ($notReady.Count -eq 0) `
         "Pod $($pod.metadata.name) está Ready"
 }
 
@@ -114,6 +128,10 @@ $parallelism = kubectl exec `
     airflow-scheduler-0 `
     -c scheduler `
     -- airflow config get-value core parallelism
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Não foi possível consultar o parallelism do Airflow."
+}
 
 Assert-Ok `
     ($parallelism.Trim() -eq "2") `
@@ -126,6 +144,10 @@ $dagList = kubectl exec `
     airflow-scheduler-0 `
     -c scheduler `
     -- airflow dags list
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Não foi possível listar as DAGs do Airflow."
+}
 
 $dagText = $dagList -join "`n"
 
@@ -167,6 +189,10 @@ $taskList = kubectl exec `
     -c scheduler `
     -- airflow tasks list $DagId
 
+if ($LASTEXITCODE -ne 0) {
+    throw "Não foi possível listar as tasks da DAG $DagId."
+}
+
 $taskText = $taskList -join "`n"
 
 foreach ($taskId in $ExpectedTasks) {
@@ -192,6 +218,10 @@ $rawSchema = kubectl exec `
     -d banvic `
     -tAc `
     "SELECT 1 FROM information_schema.schemata WHERE schema_name='raw';"
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Não foi possível consultar o schema raw."
+}
 
 Assert-Ok `
     ($rawSchema.Trim() -eq "1") `
@@ -246,6 +276,10 @@ $queryResult = kubectl exec `
     -F "|" `
     -c $query
 
+if ($LASTEXITCODE -ne 0) {
+    throw "Falha ao consultar as contagens das tabelas no PostgreSQL."
+}
+
 $rows = @()
 
 foreach ($line in $queryResult) {
@@ -280,49 +314,70 @@ foreach ($tableName in $ExpectedCounts.Keys) {
 
 Write-Step "Últimas execuções da DAG"
 
-$dagRunsJson = kubectl exec `
+# Captura a saída inteira porque o Airflow pode emitir logs
+# de inicialização antes do JSON solicitado.
+$dagRunsOutput = kubectl exec `
     -n $Namespace `
     airflow-scheduler-0 `
     -c scheduler `
-    -- airflow dags list-runs $DagId -o json
+    -- airflow dags list-runs $DagId --output json 2>&1
 
-if ($LASTEXITCODE -ne 0) {
+$dagRunsExitCode = $LASTEXITCODE
+
+if ($dagRunsExitCode -ne 0) {
     throw "Não foi possível consultar as execuções da DAG."
 }
 
-$dagRunsText = $dagRunsJson -join "`n"
+$dagRunsText = ($dagRunsOutput | ForEach-Object {
+    $_.ToString()
+}) -join "`n"
+
+# Localiza o array JSON que começa com os objetos de execução,
+# ignorando mensagens de log anteriores à resposta.
+$jsonMatch = [regex]::Match(
+    $dagRunsText,
+    '(?s)(\[\s*\{\s*"dag_id"\s*:.*\])\s*$'
+)
+
+if (-not $jsonMatch.Success) {
+    Write-Host "Saída recebida do Airflow:" -ForegroundColor Yellow
+    Write-Host $dagRunsText
+    throw "Não foi possível localizar o JSON das execuções da DAG."
+}
 
 try {
-    $dagRuns = $dagRunsText | ConvertFrom-Json
+    $dagRuns = $jsonMatch.Groups[1].Value | ConvertFrom-Json
 }
 catch {
-    throw "Não foi possível interpretar a saída JSON das execuções da DAG."
+    throw "Não foi possível interpretar o JSON das execuções da DAG: $($_.Exception.Message)"
 }
 
-if ($dagRuns -is [System.Array]) {
-    $runs = @($dagRuns)
-}
-elseif ($dagRuns.dag_runs) {
-    $runs = @($dagRuns.dag_runs)
-}
-else {
-    $runs = @($dagRuns)
-}
+$runs = @($dagRuns)
 
 Assert-Ok `
     ($runs.Count -gt 0) `
     "Existe pelo menos uma execução da DAG"
 
+# O Airflow pode retornar logical_date vazio em algumas
+# execuções manuais; nesses casos, usa-se start_date.
 $latestRun = $runs |
     Sort-Object {
-        if ($_.logical_date) {
-            [datetime]$_.logical_date
+        if (
+            -not [string]::IsNullOrWhiteSpace(
+                [string]$_.logical_date
+            )
+        ) {
+            [datetimeoffset]$_.logical_date
         }
-        elseif ($_.start_date) {
-            [datetime]$_.start_date
+        elseif (
+            -not [string]::IsNullOrWhiteSpace(
+                [string]$_.start_date
+            )
+        ) {
+            [datetimeoffset]$_.start_date
         }
         else {
-            [datetime]::MinValue
+            [datetimeoffset]::MinValue
         }
     } -Descending |
     Select-Object -First 1
@@ -333,7 +388,7 @@ Assert-Ok `
 
 Write-Host ""
 Write-Host "Última execução:" -ForegroundColor Yellow
-Write-Host "Run ID : $($latestRun.dag_run_id)"
+Write-Host "Run ID : $($latestRun.run_id)"
 Write-Host "Estado : $($latestRun.state)"
 
 Assert-Ok `
