@@ -1,3 +1,4 @@
+
 resource "kubernetes_service_v1" "postgres" {
   metadata {
     name      = "banvic-postgres"
@@ -31,6 +32,10 @@ resource "kubernetes_deployment_v1" "postgres" {
   spec {
     replicas = 1
 
+    strategy {
+      type = "Recreate"
+    }
+
     selector {
       match_labels = {
         app = "banvic-postgres"
@@ -61,19 +66,33 @@ resource "kubernetes_deployment_v1" "postgres" {
 
           resources {
             requests = {
-              cpu    = "50m"
-              memory = "128Mi"
+              cpu    = "100m"
+              memory = "256Mi"
             }
 
             limits = {
-              cpu    = "250m"
-              memory = "256Mi"
+              cpu    = "500m"
+              memory = "512Mi"
             }
           }
 
           volume_mount {
             name       = "postgres-data"
             mount_path = "/var/lib/postgresql/data"
+          }
+
+          startup_probe {
+            exec {
+              command = [
+                "/bin/sh",
+                "-c",
+                "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""
+              ]
+            }
+
+            period_seconds    = 10
+            timeout_seconds   = 5
+            failure_threshold = 60
           }
 
           readiness_probe {
